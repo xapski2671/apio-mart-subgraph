@@ -1,6 +1,6 @@
 specVersion: 0.0.4
 schema:
-  file: ./schema.graphql
+  file: schema.graphql
 dataSources:
   - kind: ethereum
     name: NFTMarketplace
@@ -20,7 +20,7 @@ dataSources:
         - ItemRemoved
       abis:
         - name: NFTMarketplace
-          file: ./abis/NFTMarketplace.json
+          file: NFTMarketplace\abis\NFTMarketplace.json
       eventHandlers:
         - event: CollectionFound(string,string,indexed address)
           handler: handleCollectionFound
@@ -30,4 +30,4 @@ dataSources:
           handler: handleItemListed
         - event: ItemRemoved(indexed address,indexed address,indexed uint256)
           handler: handleItemRemoved
-      file: ./src/nft-marketplace.ts
+      file: NFTMarketplace\NFTMarketplace.wasm

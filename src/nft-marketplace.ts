@@ -1,59 +1,107 @@
-import { BigInt } from "@graphprotocol/graph-ts"
+import { Address, BigInt, store, Bytes } from "@graphprotocol/graph-ts"
 import {
-  NFTMarketplace,
-  CollectionFound,
-  ItemBought,
-  ItemListed,
-  ItemRemoved
+  CollectionFound as CollectionFoundEvent,
+  ItemBought as ItemBoughtEvent,
+  ItemListed as ItemListedEvent,
+  ItemRemoved as ItemRemovedEvent
 } from "../generated/NFTMarketplace/NFTMarketplace"
-import { ExampleEntity } from "../generated/schema"
+import {ActiveItem, ItemBought, ItemListed, ItemRemoved, CollectionFound} from "../generated/schema"
 
-export function handleCollectionFound(event: CollectionFound): void {
-  // Entities can be loaded from the store using a string ID; this ID
-  // needs to be unique across all entities of the same type
-  let entity = ExampleEntity.load(event.transaction.from.toHex())
 
-  // Entities only exist after they have been saved to the store;
-  // `null` checks allow to create entities on demand
-  if (!entity) {
-    entity = new ExampleEntity(event.transaction.from.toHex())
 
-    // Entity fields can be set using simple assignments
-    entity.count = BigInt.fromI32(0)
+export function handleCollectionFound(event: CollectionFoundEvent): void {
+  let collectionFound = CollectionFound.load(getIdForCollection(event.params.nftAddress_))
+  if(!collectionFound){
+    collectionFound = new CollectionFound(getIdForCollection(event.params.nftAddress_))
+
+    collectionFound.name = event.params.name_
+    collectionFound.symbol = event.params.symbol_
+    collectionFound.nftAddress = event.params.nftAddress_
+    collectionFound.createdAt = event.block.timestamp
+
+    collectionFound.save()
   }
-
-  // BigInt and BigDecimal math are supported
-  entity.count = entity.count + BigInt.fromI32(1)
-
-  // Entity fields can be set based on event parameters
-  entity.name_ = event.params.name_
-  entity.symbol_ = event.params.symbol_
-
-  // Entities can be written to the store with `.save()`
-  entity.save()
-
-  // Note: If a handler doesn't require existing field values, it is faster
-  // _not_ to load the entity from the store. Instead, create it fresh with
-  // `new Entity(...)`, set the fields that should be updated and save the
-  // entity back to the store. Fields that were not set or unset remain
-  // unchanged, allowing for partial updates to be applied.
-
-  // It is also possible to access smart contracts from mappings. For
-  // example, the contract that has emitted the event can be connected to
-  // with:
-  //
-  // let contract = Contract.bind(event.address)
-  //
-  // The following functions can then be called on this contract to access
-  // state variables and other data:
-  //
-  // - contract.getCollection(...)
-  // - contract.getListing(...)
-  // - contract.getProceeds(...)
 }
 
-export function handleItemBought(event: ItemBought): void {}
+export function handleItemListed(event: ItemListedEvent): void {
+  let itemListed = ItemListed.load(getIdFromParams(event.params.tokenId_, event.params.nftAddress_))
+  let activeItem = ActiveItem.load(getIdFromParams(event.params.tokenId_, event.params.nftAddress_))
 
-export function handleItemListed(event: ItemListed): void {}
+  if(!itemListed){
+    itemListed = new ItemListed(getIdFromParams(event.params.tokenId_, event.params.nftAddress_))
+  }
+  // v activeitem document will not exist if respective itemlisted document doesnt exist
+  if(!activeItem){
+    activeItem = new ActiveItem(getIdFromParams(event.params.tokenId_, event.params.nftAddress_))
+  }
+  
+  // v populating the fields with their values
+  itemListed.seller = event.params.seller_
+  activeItem.seller = event.params.seller_
 
-export function handleItemRemoved(event: ItemRemoved): void {}
+  itemListed.nftAddress = event.params.nftAddress_
+  activeItem.nftAddress = event.params.nftAddress_
+
+  itemListed.tokenId = event.params.tokenId_
+  activeItem.tokenId = event.params.tokenId_
+
+  itemListed.price = event.params.price_
+  activeItem.price = event.params.price_
+
+  itemListed.createdAt = event.block.timestamp
+  activeItem.createdAt = event.block.timestamp
+
+  itemListed.save()
+  activeItem.save()
+
+
+}
+
+export function handleItemBought(event: ItemBoughtEvent): void {
+  // save the event in our graph update activeitem table
+  // get itembought object
+  // we have to make an id for each event we'd with getIdfromparams()
+  let itemBought = ItemBought.load(getIdFromParams(event.params.tokenId_, event.params.nftAddress_)) // we load an object using its id
+  let activeItem = ActiveItem.load(getIdFromParams(event.params.tokenId_, event.params.nftAddress_))
+  if(!itemBought){
+    itemBought = new ItemBought(getIdFromParams(event.params.tokenId_, event.params.nftAddress_)) // new document from the 
+  }
+  // v populating the fields with their values
+  itemBought.buyer = event.params.buyer_
+  itemBought.nftAddress = event.params.nftAddress_
+  itemBought.tokenId = event.params.tokenId_
+  itemBought.createdAt = event.block.timestamp
+  itemBought.price = event.params.price_
+
+  let id = getIdFromParams(event.params.tokenId_, event.params.nftAddress_)  
+  store.remove("ActiveItem", id)
+  
+  itemBought.save()
+}
+
+export function handleItemRemoved(event: ItemRemovedEvent): void {
+  let itemRemoved = ItemRemoved.load(getIdFromParams(event.params.tokenId_, event.params.nftAddress_))
+  let activeItem = ActiveItem.load(getIdFromParams(event.params.tokenId_, event.params.nftAddress_))
+  if(!itemRemoved){
+    itemRemoved = new ItemRemoved(getIdFromParams(event.params.tokenId_, event.params.nftAddress_))
+  }
+
+  itemRemoved.seller = event.params.seller_
+  itemRemoved.nftAddress = event.params.nftAddress_
+  itemRemoved.tokenId = event.params.tokenId_
+  // v for an ItemRemoved its corresponding activeItem will already exist
+  let id = getIdFromParams(event.params.tokenId_, event.params.nftAddress_)  
+  store.remove("ActiveItem", id)
+
+  itemRemoved.save()
+}
+
+function getIdFromParams(tokenId: BigInt, nftAddress: Address): string {
+  // ^ params are declared with their type and string is the return type
+  return tokenId.toHexString() + nftAddress.toHexString()
+  // ^ that's how we make our id
+}
+
+function getIdForCollection(nftAddress: Address): string {
+  return nftAddress.toHexString()
+}
